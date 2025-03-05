@@ -12,10 +12,53 @@ const ContactForm = () => {
     message: ''
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [status, setStatus] = useState({
+    loading: false,
+    message: '',
+    isError: false
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle form submission here
-    console.log('Form submitted:', formData);
+    setStatus({ loading: true, message: '', isError: false });
+
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Có lỗi xảy ra');
+      }
+
+      setStatus({
+        loading: false,
+        message: 'Cảm ơn bạn! Chúng tôi sẽ liên hệ lại trong thời gian sớm nhất.',
+        isError: false
+      });
+
+      // Reset form
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        company: '',
+        industry: '',
+        message: ''
+      });
+    } catch (error) {
+      setStatus({
+        loading: false,
+        message: error instanceof Error ? error.message : 'Có lỗi xảy ra, vui lòng thử lại sau.',
+        isError: true
+      });
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -48,6 +91,7 @@ const ContactForm = () => {
               onChange={handleChange}
               className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
+              disabled={status.loading}
             />
           </div>
           <div>
@@ -59,6 +103,7 @@ const ContactForm = () => {
               onChange={handleChange}
               className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
+              disabled={status.loading}
             />
           </div>
         </div>
@@ -73,6 +118,7 @@ const ContactForm = () => {
               onChange={handleChange}
               className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
+              disabled={status.loading}
             />
           </div>
           <div>
@@ -84,6 +130,7 @@ const ContactForm = () => {
               onChange={handleChange}
               className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
+              disabled={status.loading}
             />
           </div>
         </div>
@@ -96,6 +143,7 @@ const ContactForm = () => {
             onChange={handleChange}
             className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             required
+            disabled={status.loading}
           >
             <option value="">Chọn lĩnh vực</option>
             <option value="retail">Bán lẻ</option>
@@ -114,15 +162,25 @@ const ContactForm = () => {
             onChange={handleChange}
             rows={4}
             className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            disabled={status.loading}
           ></textarea>
         </div>
+
+        {status.message && (
+          <div className={`p-4 rounded-lg ${status.isError ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+            {status.message}
+          </div>
+        )}
 
         <div className="text-center">
           <button
             type="submit"
-            className="bg-blue-600 text-white px-8 py-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors w-full"
+            className={`bg-blue-600 text-white px-8 py-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors w-full ${
+              status.loading ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+            disabled={status.loading}
           >
-            Gửi Yêu Cầu
+            {status.loading ? 'Đang gửi...' : 'Gửi Yêu Cầu'}
           </button>
           <p className="mt-4 text-sm text-gray-500">
             Chỉ còn 5 suất ưu đãi trong tháng 3/2025

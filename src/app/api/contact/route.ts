@@ -2,44 +2,73 @@ import { google } from 'googleapis';
 import { NextResponse } from 'next/server';
 import { SHEET_CONFIG } from '@/config/sheets';
 
-// Validate environment variables
-const requiredEnvVars = [
-  'GOOGLE_SHEET_ID',
-  'GOOGLE_CLIENT_EMAIL',
-  'GOOGLE_PRIVATE_KEY',
-] as const;
-
-for (const envVar of requiredEnvVars) {
-  if (!process.env[envVar]) {
-    throw new Error(`Missing required environment variable: ${envVar}`);
-  }
-}
-
 // Function to format private key
 const formatPrivateKey = (key: string) => {
-  // Remove any wrapping quotes and convert escaped newlines to actual newlines
-  const formattedKey = key
-    .replace(/^["']|["']$/g, '')  // Remove wrapping quotes
-    .replace(/\\n/g, '\n');       // Convert \n to actual newlines
-  return formattedKey;
+  try {
+    // Basic cleanup
+    let formattedKey = key.trim();
+    
+    // Remove any surrounding quotes
+    formattedKey = formattedKey.replace(/^["']|["']$/g, '');
+    
+    // Ensure proper line breaks
+    if (!formattedKey.includes('\n')) {
+      formattedKey = formattedKey
+        .replace(/\\n/g, '\n')
+        .replace(/-----BEGIN PRIVATE KEY-----/, '-----BEGIN PRIVATE KEY-----\n')
+        .replace(/-----END PRIVATE KEY-----/, '\n-----END PRIVATE KEY-----');
+    }
+
+    return formattedKey;
+  } catch (error) {
+    console.error('Error formatting private key:', error);
+    throw new Error('Failed to format private key');
+  }
 };
 
-const auth = new google.auth.GoogleAuth({
-  credentials: {
-    client_email: process.env.GOOGLE_CLIENT_EMAIL,
-    private_key: formatPrivateKey(process.env.GOOGLE_PRIVATE_KEY || ''),
-  },
-  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-});
+// Initialize auth with proper error handling
+const initializeAuth = () => {
+  try {
+    // Validate required environment variables
+    const requiredEnvVars = ['GOOGLE_SHEET_ID', 'GOOGLE_CLIENT_EMAIL', 'GOOGLE_PRIVATE_KEY'] as const;
+    for (const envVar of requiredEnvVars) {
+      if (!process.env[envVar]) {
+        throw new Error(`Missing required environment variable: ${envVar}`);
+      }
+    }
+
+    const privateKey = formatPrivateKey(process.env.GOOGLE_PRIVATE_KEY || '');
+    console.log('Private key format check:', {
+      hasHeader: privateKey.includes('-----BEGIN PRIVATE KEY-----'),
+      hasFooter: privateKey.includes('-----END PRIVATE KEY-----'),
+      containsNewlines: privateKey.includes('\n'),
+      length: privateKey.length,
+    });
+
+    return new google.auth.GoogleAuth({
+      credentials: {
+        type: 'service_account',
+        project_id: 'toloco',
+        private_key: privateKey,
+        client_email: process.env.GOOGLE_CLIENT_EMAIL,
+      },
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+  } catch (error) {
+    console.error('Auth initialization error:', error);
+    throw error;
+  }
+};
 
 export async function POST(req: Request) {
   try {
+    const auth = initializeAuth();
+    
     // Log environment variables (excluding sensitive data)
     console.log('Environment check:', {
       hasSheetId: !!process.env.GOOGLE_SHEET_ID,
       hasClientEmail: !!process.env.GOOGLE_CLIENT_EMAIL,
       hasPrivateKey: !!process.env.GOOGLE_PRIVATE_KEY,
-      privateKeyStart: process.env.GOOGLE_PRIVATE_KEY?.substring(0, 30) + '...',
       sheetConfig: {
         ...SHEET_CONFIG,
         spreadsheetId: SHEET_CONFIG.spreadsheetId?.substring(0, 5) + '...',
@@ -94,14 +123,14 @@ export async function POST(req: Request) {
       );
     } catch (error: any) {
       console.error('Google Sheets API Error:', {
-        error: error.message,
+        message: error.message,
         code: error.code,
         status: error.status,
         stack: error.stack,
       });
       
       if (error.message.includes('invalid_grant')) {
-        throw new Error('Authentication failed. Please check the credentials.');
+        throw new Error('Authentication failed: Please check service account permissions and credentials');
       }
       
       throw error;
